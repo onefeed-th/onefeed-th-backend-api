@@ -6,13 +6,47 @@
 package onefeed_th_sqlc
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"context"
 )
 
-type BulkInsertNewsParams struct {
-	Title       string           `json:"title"`
-	Link        string           `json:"link"`
-	Source      string           `json:"source"`
-	ImageUrl    pgtype.Text      `json:"image_url"`
-	PublishDate pgtype.Timestamp `json:"publish_date"`
+const listNews = `-- name: ListNews :many
+SELECT id, title, link, source, image_url, publish_date, fetched_at
+FROM news
+WHERE news.source = ANY($1::TEXT[])
+ORDER BY publish_date DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListNewsParams struct {
+	Sources    []string `json:"sources"`
+	PageOffset int32    `json:"page_offset"`
+	PageLimit  int32    `json:"page_limit"`
+}
+
+func (q *Queries) ListNews(ctx context.Context, arg ListNewsParams) ([]News, error) {
+	rows, err := q.db.Query(ctx, listNews, arg.Sources, arg.PageOffset, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []News
+	for rows.Next() {
+		var i News
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Link,
+			&i.Source,
+			&i.ImageUrl,
+			&i.PublishDate,
+			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

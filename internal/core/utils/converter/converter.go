@@ -26,3 +26,10 @@ func TimePointerToPGTypeTimestamp(s *time.Time) pgtype.Timestamp {
 		Time:  *s,
 	}
 }
+
+func PGTypeTimestampToTime(s pgtype.Timestamp) time.Time {
+	if !s.Valid {
+		return time.Time{}
+	}
+	return s.Time
+}

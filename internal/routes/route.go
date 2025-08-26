@@ -33,5 +33,14 @@ func RegisterRoutes(service service.Service) http.Handler {
 		)
 	}
 
+	// news
+	{
+		r.Post("/news",
+			httpserver.NewEndpoint(
+				service.GetNews,
+			),
+		)
+	}
+
 	return mux
 }

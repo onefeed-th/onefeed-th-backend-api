@@ -6,10 +6,10 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
-	"github.com/onefeed-th/onefeed-th-backend-api/internal/core/utils/converter"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/dto"
 	onefeed_th_sqlc "github.com/onefeed-th/onefeed-th-backend-api/internal/sqlc/onefeed_th_sqlc/db"
 )
@@ -18,13 +18,21 @@ type CollectorService interface {
 	CollectNewsFromSource(ctx context.Context, req dto.BlankRequest) (any, error)
 }
 
+type bulkInsertNewsParams struct {
+	Title       string
+	Link        string
+	Source      string
+	ImageUrl    string
+	PublishDate *time.Time
+}
+
 func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankRequest) (any, error) {
 	sources, err := s.repo.SourceRepository.GetAllSources(ctx)
 	if err != nil {
 		return dto.Response{}, err
 	}
 
-	var newsItems []onefeed_th_sqlc.BulkInsertNewsParams
+	var newsItems []bulkInsertNewsParams
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
@@ -42,14 +50,14 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 				return
 			}
 
-			var localItems []onefeed_th_sqlc.BulkInsertNewsParams
+			var localItems []bulkInsertNewsParams
 			for _, item := range feeds.Items {
-				news := onefeed_th_sqlc.BulkInsertNewsParams{
+				news := bulkInsertNewsParams{
 					Title:       item.Title,
 					Link:        sanitizeLink(item.Link),
 					Source:      src.Name,
-					ImageUrl:    converter.StringToPGTypeTextNull(extractImage(item)),
-					PublishDate: converter.TimePointerToPGTypeTimestamp(item.PublishedParsed),
+					ImageUrl:    extractImage(item),
+					PublishDate: item.PublishedParsed,
 				}
 				localItems = append(localItems, news)
 			}
@@ -110,7 +118,7 @@ func sanitizeLink(raw string) string {
 	return raw
 }
 
-func (s *service) insertNewsWithBatch(ctx context.Context, newsItems []onefeed_th_sqlc.BulkInsertNewsParams) error {
+func (s *service) insertNewsWithBatch(ctx context.Context, newsItems []bulkInsertNewsParams) error {
 	for i := 0; i < len(newsItems); i += 100 {
 		end := min(i+100, len(newsItems))
 		batch := newsItems[i:end]

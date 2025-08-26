@@ -7,3 +7,9 @@ CREATE TABLE news (
   publish_date TIMESTAMP,
   fetched_at TIMESTAMP DEFAULT NOW() -- เวลาเราดึงมาเก็บ
 );
+-- name: ListNews :many
+SELECT *
+FROM news
+WHERE news.source = ANY(@sources::TEXT[])
+ORDER BY publish_date DESC
+LIMIT @page_limit OFFSET @page_offset;

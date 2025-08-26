@@ -4,10 +4,12 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	onefeed_th_sqlc "github.com/onefeed-th/onefeed-th-backend-api/internal/sqlc/onefeed_th_sqlc/db"
 )
 
 type NewsRepository interface {
 	BulkInsertNews(ctx context.Context, stringBuilder string, args []interface{}) error
+	GetNews(ctx context.Context, params onefeed_th_sqlc.ListNewsParams) ([]onefeed_th_sqlc.News, error)
 }
 
 type NewsRepositoryImpl struct {
@@ -26,4 +28,9 @@ func (r *NewsRepositoryImpl) BulkInsertNews(ctx context.Context, stringBuilder s
 		return err
 	}
 	return nil
+}
+
+func (r *NewsRepositoryImpl) GetNews(ctx context.Context, params onefeed_th_sqlc.ListNewsParams) ([]onefeed_th_sqlc.News, error) {
+	query := onefeed_th_sqlc.New(r.pool)
+	return query.ListNews(ctx, params)
 }
