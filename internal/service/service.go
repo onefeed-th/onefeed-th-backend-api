@@ -4,6 +4,7 @@ import "github.com/onefeed-th/onefeed-th-backend-api/internal/repository"
 
 type Service interface {
 	ServerService
+	CollectorService
 }
 
 type service struct {

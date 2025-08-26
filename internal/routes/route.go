@@ -24,5 +24,14 @@ func RegisterRoutes(service service.Service) http.Handler {
 		)
 	}
 
+	// collector
+	{
+		r.Get("/internal/collect",
+			httpserver.NewEndpoint(
+				service.CollectNewsFromSource,
+			),
+		)
+	}
+
 	return mux
 }
