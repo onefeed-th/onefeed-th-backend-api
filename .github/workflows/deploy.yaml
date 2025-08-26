@@ -1,0 +1,55 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_call:
+    inputs:
+      k8s_namespace:
+        description: "The Kubernetes namespace for the deployment"
+        required: true
+        type: string
+      k8s_deployment_name:
+        description: "The name of the Kubernetes Deployment resource"
+        required: true
+        type: string
+      timeout_minutes:
+        description: "Timeout for kubectl rollout status in minutes"
+        required: false
+        type: number
+        default: 5 # Default to 5 minutes if not provided
+
+    secrets:
+      kube_config_base64:
+        description: "Base64 encoded Kubeconfig file for cluster access"
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Kubeconfig
+        run: |
+          mkdir -p /home/runner/.kube # Use absolute path
+          echo "${{ secrets.kube_config_base64 }}" | base64 -d > /home/runner/.kube/config # Use absolute path
+          chmod 600 /home/runner/.kube/config # Use absolute path
+          echo "KUBECONFIG=/home/runner/.kube/config" >> $GITHUB_ENV # Set env var with absolute path
+          kubectl config get-contexts --kubeconfig=/home/runner/.kube/config # Use absolute path for debug
+          kubectl config use-context k3s-amd-context --kubeconfig=/home/runner/.kube/config # Use absolute path
+
+          echo "--- Content of /home/runner/.kube/config ---" # For debugging
+          cat /home/runner/.kube/config # For debugging
+          echo "-------------------------------" # For debugging
+
+      - name: Rollout restart Kubernetes Deployment
+        run: |
+          echo "Triggering rollout restart for deployment '${{ inputs.k8s_deployment_name }}' in namespace '${{ inputs.k8s_namespace }}'"
+          echo "using : kubectl rollout restart deployment/${{ inputs.k8s_deployment_name }} -n ${{ inputs.k8s_namespace }}"
+          kubectl --kubeconfig=/home/runner/.kube/config rollout restart deployment/${{ inputs.k8s_deployment_name }} \
+            -n ${{ inputs.k8s_namespace }}
+
+      # - name: Wait for Kubernetes Rollout to complete
+      #   run: |
+      #     echo "Waiting for rollout of deployment '${{ inputs.k8s_deployment_name }}' to complete (timeout: ${{ inputs.timeout_minutes }}m)..."
+      #     kubectl --kubeconfig=/home/runner/.kube/config rollout status deployment/${{ inputs.k8s_deployment_name }} \
+      #       -n ${{ inputs.k8s_namespace }} --timeout=${{ inputs.timeout_minutes }}m
+      #     echo "Rollout completed successfully!"
