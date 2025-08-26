@@ -2,12 +2,16 @@ package service
 
 import "github.com/onefeed-th/onefeed-th-backend-api/internal/repository"
 
-type Service struct {
+type Service interface {
+	ServerService
+}
+
+type service struct {
 	repo *repository.Repository
 }
 
-func NewService(repo *repository.Repository) *Service {
-	return &Service{
+func NewService(repo *repository.Repository) Service {
+	return &service{
 		repo: repo,
 	}
 }

@@ -4,12 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/onefeed-th/onefeed-th-backend-api/config"
 )
 
 var pool *pgxpool.Pool
@@ -41,11 +40,12 @@ func GetPool() *pgxpool.Pool {
 }
 
 func buildPostgresDSN() (string, error) {
-	user := os.Getenv("POSTGRES_USER")
-	password := os.Getenv("POSTGRES_PASSWORD")
-	host := os.Getenv("POSTGRES_HOST")
-	portStr := os.Getenv("POSTGRES_PORT")
-	db := os.Getenv("POSTGRES_DB")
+	config := config.GetConfig()
+	user := config.Postgres.User
+	password := config.Postgres.Password
+	host := config.Postgres.Host
+	port := config.Postgres.Port
+	db := config.Postgres.Dbname
 
 	var missing []string
 	if user == "" {
@@ -57,25 +57,21 @@ func buildPostgresDSN() (string, error) {
 	if host == "" {
 		missing = append(missing, "POSTGRES_HOST")
 	}
-	if portStr == "" {
+	if port == 0 {
 		missing = append(missing, "POSTGRES_PORT")
 	}
 	if db == "" {
-		missing = append(missing, "POSTGRES_DB")
+		missing = append(missing, "POSTGREwS_DB")
 	}
 
 	if len(missing) > 0 {
 		return "", fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
 	}
 
-	if _, err := strconv.Atoi(portStr); err != nil {
-		return "", fmt.Errorf("invalid POSTGRES_PORT: %s", portStr)
-	}
-
 	u := &url.URL{
 		Scheme: "postgres",
 		User:   url.UserPassword(user, password),
-		Host:   fmt.Sprintf("%s:%s", host, portStr),
+		Host:   fmt.Sprintf("%s:%d", host, port),
 		Path:   db,
 	}
 

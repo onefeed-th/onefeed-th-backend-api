@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/onefeed-th/onefeed-th-backend-api/config"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/db"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/middleware"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/repository"
@@ -21,6 +22,13 @@ func main() {
 	// setup signal handling
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// initialize configuration
+	cfg, err := config.ResolveConfigFromFile(ctx, "config/config.yaml")
+	if err != nil {
+		log.Println("Failed to load configuration:", err)
+		return
+	}
 
 	// initialize database
 	if err := db.InitDB(); err != nil {
@@ -43,13 +51,13 @@ func main() {
 
 	// create configure http server
 	server := http.Server{
-		Addr:    fmt.Sprintf(":%d", 3000),
+		Addr:    fmt.Sprintf(":%d", cfg.RestServer.Port),
 		Handler: httpHandler,
 	}
 
 	go func() {
-		log.Printf("Starting REST Server on port %d\n", 3000)
-		log.Printf("Local : http://localhost:%d\n", 3000)
+		log.Printf("Starting REST Server on port %d\n", cfg.RestServer.Port)
+		log.Printf("Local : http://localhost:%d\n", cfg.RestServer.Port)
 		log.Println("waiting for request...")
 
 		err := server.ListenAndServe()
