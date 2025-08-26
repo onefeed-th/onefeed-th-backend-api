@@ -10,6 +10,9 @@ CREATE TABLE news (
 -- name: ListNews :many
 SELECT *
 FROM news
-WHERE news.source = ANY(@sources::TEXT[])
+WHERE news.source = ANY(@sources::TEXT [])
 ORDER BY publish_date DESC
 LIMIT @page_limit OFFSET @page_offset;
+-- name: RemoveNewsByPublishedDate :exec
+DELETE FROM news
+WHERE publish_date < NOW() - INTERVAL '30 days';

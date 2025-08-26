@@ -31,6 +31,11 @@ func RegisterRoutes(service service.Service) http.Handler {
 				service.CollectNewsFromSource,
 			),
 		)
+		r.Post("/internal/delete-old-news",
+			httpserver.NewEndpoint(
+				service.RemoveOldNews,
+			),
+		)
 	}
 
 	// news

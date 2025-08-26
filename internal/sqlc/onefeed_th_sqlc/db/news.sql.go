@@ -12,7 +12,7 @@ import (
 const listNews = `-- name: ListNews :many
 SELECT id, title, link, source, image_url, publish_date, fetched_at
 FROM news
-WHERE news.source = ANY($1::TEXT[])
+WHERE news.source = ANY($1::TEXT [])
 ORDER BY publish_date DESC
 LIMIT $3 OFFSET $2
 `
@@ -49,4 +49,14 @@ func (q *Queries) ListNews(ctx context.Context, arg ListNewsParams) ([]News, err
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeNewsByPublishedDate = `-- name: RemoveNewsByPublishedDate :exec
+DELETE FROM news
+WHERE publish_date < NOW() - INTERVAL '30 days'
+`
+
+func (q *Queries) RemoveNewsByPublishedDate(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, removeNewsByPublishedDate)
+	return err
 }

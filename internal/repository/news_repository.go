@@ -10,6 +10,7 @@ import (
 type NewsRepository interface {
 	BulkInsertNews(ctx context.Context, stringBuilder string, args []interface{}) error
 	GetNews(ctx context.Context, params onefeed_th_sqlc.ListNewsParams) ([]onefeed_th_sqlc.News, error)
+	RemoveNewsByPublishedDate(ctx context.Context) error
 }
 
 type NewsRepositoryImpl struct {
@@ -33,4 +34,9 @@ func (r *NewsRepositoryImpl) BulkInsertNews(ctx context.Context, stringBuilder s
 func (r *NewsRepositoryImpl) GetNews(ctx context.Context, params onefeed_th_sqlc.ListNewsParams) ([]onefeed_th_sqlc.News, error) {
 	query := onefeed_th_sqlc.New(r.pool)
 	return query.ListNews(ctx, params)
+}
+
+func (r *NewsRepositoryImpl) RemoveNewsByPublishedDate(ctx context.Context) error {
+	query := onefeed_th_sqlc.New(r.pool)
+	return query.RemoveNewsByPublishedDate(ctx)
 }

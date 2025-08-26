@@ -11,6 +11,7 @@ import (
 
 type NewsService interface {
 	GetNews(ctx context.Context, req dto.NewsGetRequest) ([]dto.NewsGetResponse, error)
+	RemoveOldNews(ctx context.Context, req dto.BlankRequest) (any, error)
 }
 
 func (s *service) GetNews(ctx context.Context, req dto.NewsGetRequest) ([]dto.NewsGetResponse, error) {
@@ -45,4 +46,12 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsGetRequest) ([]dto.Ne
 	}
 
 	return responses, nil
+}
+
+func (s *service) RemoveOldNews(ctx context.Context, req dto.BlankRequest) (any, error) {
+	err := s.repo.NewsRepository.RemoveNewsByPublishedDate(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
