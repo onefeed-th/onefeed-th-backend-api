@@ -42,7 +42,7 @@ jobs:
           file: Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:latest
+          tags: ghcr.io/${{ github.repository }}:latest
 
       - name: Clean up Docker images
         run: docker image prune -af
