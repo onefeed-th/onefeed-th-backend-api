@@ -26,6 +26,15 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.WORKFLOW_PAT }}
 
+      - name: Repository Owner
+        run: 'echo "Repository Owner: ${{ github.repository_owner }}"'
+
+      - name: Repository Name
+        run: 'echo "Repository Name: ${{ github.repository }}"'
+
+      - name: Actor
+        run: 'echo "Triggered by: ${{ github.actor }}"'
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
