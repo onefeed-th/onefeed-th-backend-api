@@ -42,6 +42,7 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsGetRequest) ([]dto.Ne
 			Source:      item.Source,
 			PublishedAt: converter.PGTypeTimestampToTime(item.PublishDate),
 			Link:        item.Link,
+			Image:       item.ImageUrl.String,
 		})
 	}
 

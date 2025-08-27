@@ -12,5 +12,6 @@ type NewsGetResponse struct {
 	Title       string    `json:"title"`
 	Source      string    `json:"source"`
 	PublishedAt time.Time `json:"published_at"`
+	Image       string    `json:"image"`
 	Link        string    `json:"link"`
 }
