@@ -9,6 +9,31 @@ import (
 	"context"
 )
 
+const getAllSource = `-- name: GetAllSource :many
+SELECT DISTINCT source
+FROM news
+`
+
+func (q *Queries) GetAllSource(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, getAllSource)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var source string
+		if err := rows.Scan(&source); err != nil {
+			return nil, err
+		}
+		items = append(items, source)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNews = `-- name: ListNews :many
 SELECT id, title, link, source, image_url, publish_date, fetched_at
 FROM news

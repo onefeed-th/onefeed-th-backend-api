@@ -16,3 +16,6 @@ LIMIT @page_limit OFFSET @page_offset;
 -- name: RemoveNewsByPublishedDate :exec
 DELETE FROM news
 WHERE publish_date < NOW() - INTERVAL '30 days';
+-- name: GetAllSource :many
+SELECT DISTINCT source
+FROM news;

@@ -6,6 +6,7 @@ type Service interface {
 	ServerService
 	CollectorService
 	NewsService
+	TagService
 }
 
 type service struct {

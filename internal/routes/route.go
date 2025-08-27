@@ -47,5 +47,14 @@ func RegisterRoutes(service service.Service) http.Handler {
 		)
 	}
 
+	// tags
+	{
+		r.Get("/tags",
+			httpserver.NewEndpoint(
+				service.GetAllTags,
+			),
+		)
+	}
+
 	return mux
 }
