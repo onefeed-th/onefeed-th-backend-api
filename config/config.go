@@ -9,6 +9,7 @@ import (
 type Config struct {
 	RestServer restServer `mapstructure:"restServer"`
 	Postgres   postgres   `mapstructure:"postgres"`
+	Redis      redis      `mapstructure:"redis"`
 }
 
 type restServer struct {
@@ -21,6 +22,12 @@ type postgres struct {
 	User     string `mapstructure:"user"`
 	Password string `mapstructure:"password"`
 	Dbname   string `mapstructure:"dbname"`
+}
+
+type redis struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Password string `mapstructure:"password"`
 }
 
 var config *Config

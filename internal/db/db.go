@@ -61,7 +61,7 @@ func buildPostgresDSN() (string, error) {
 		missing = append(missing, "POSTGRES_PORT")
 	}
 	if db == "" {
-		missing = append(missing, "POSTGREwS_DB")
+		missing = append(missing, "POSTGRES_DB")
 	}
 
 	if len(missing) > 0 {

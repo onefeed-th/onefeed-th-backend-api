@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/onefeed-th/onefeed-th-backend-api/config"
+	"github.com/onefeed-th/onefeed-th-backend-api/internal/core/rds"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/db"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/middleware"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/repository"
@@ -33,6 +34,11 @@ func main() {
 	// initialize database
 	if err := db.InitDB(); err != nil {
 		log.Println("Failed to initialize database:", err)
+	}
+
+	// initialize Redis
+	if err := rds.InitRedis(ctx); err != nil {
+		log.Println("Failed to initialize Redis:", err)
 	}
 
 	// initialize repository

@@ -78,6 +78,12 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 		return nil, err
 	}
 
+	err = s.redis.RemoveKeyContaining(ctx, "news")
+	if err != nil {
+		log.Println("Error removing keys from Redis:", err)
+		return nil, err
+	}
+
 	return nil, nil
 }
 

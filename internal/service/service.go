@@ -1,6 +1,9 @@
 package service
 
-import "github.com/onefeed-th/onefeed-th-backend-api/internal/repository"
+import (
+	"github.com/onefeed-th/onefeed-th-backend-api/internal/core/rds"
+	"github.com/onefeed-th/onefeed-th-backend-api/internal/repository"
+)
 
 type Service interface {
 	ServerService
@@ -10,11 +13,13 @@ type Service interface {
 }
 
 type service struct {
-	repo *repository.Repository
+	repo  *repository.Repository
+	redis rds.RedisClient
 }
 
 func NewService(repo *repository.Repository) Service {
 	return &service{
-		repo: repo,
+		repo:  repo,
+		redis: rds.NewRedisClient(),
 	}
 }

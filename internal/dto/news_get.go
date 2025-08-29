@@ -2,13 +2,13 @@ package dto
 
 import "time"
 
-type NewsGetRequest struct {
+type NewsListGetRequest struct {
 	Page   int32    `json:"page"`
 	Limit  int32    `json:"limit"`
 	Source []string `json:"source,omitempty"`
 }
 
-type NewsGetResponse struct {
+type NewsListGetResponse struct {
 	Title       string    `json:"title"`
 	Source      string    `json:"source"`
 	PublishedAt time.Time `json:"published_at"`

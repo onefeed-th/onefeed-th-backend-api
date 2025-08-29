@@ -26,7 +26,7 @@ func RegisterRoutes(service service.Service) http.Handler {
 
 	// collector
 	{
-		r.Get("/internal/collect",
+		r.Post("/internal/collect",
 			httpserver.NewEndpoint(
 				service.CollectNewsFromSource,
 			),
