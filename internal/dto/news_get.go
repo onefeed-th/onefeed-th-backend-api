@@ -11,7 +11,7 @@ type NewsListGetRequest struct {
 type NewsListGetResponse struct {
 	Title       string    `json:"title"`
 	Source      string    `json:"source"`
-	PublishedAt time.Time `json:"published_at"`
+	PublishedAt time.Time `json:"publishedAt"`
 	Image       string    `json:"image"`
 	Link        string    `json:"link"`
 }
