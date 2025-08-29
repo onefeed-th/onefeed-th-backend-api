@@ -14,7 +14,7 @@ import (
 var pool *pgxpool.Pool
 
 func InitDB() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	dsn, err := buildPostgresDSN()
@@ -22,9 +22,27 @@ func InitDB() error {
 		return err
 	}
 
-	pool, err = pgxpool.New(ctx, dsn)
+	// Parse the DSN and configure connection pool
+	poolConfig, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse database DSN: %w", err)
+	}
+
+	// Get pool configuration from config
+	cfg := config.GetConfig()
+	
+	// Configure connection pool settings from config
+	poolConfig.MaxConns = cfg.Postgres.Pool.MaxConns
+	poolConfig.MinConns = cfg.Postgres.Pool.MinConns
+	poolConfig.MaxConnLifetime = time.Duration(cfg.Postgres.Pool.MaxConnLifetime) * time.Minute
+	poolConfig.MaxConnIdleTime = time.Duration(cfg.Postgres.Pool.MaxConnIdleTime) * time.Minute
+	poolConfig.HealthCheckPeriod = time.Duration(cfg.Postgres.Pool.HealthCheckPeriod) * time.Minute
+	poolConfig.ConnConfig.ConnectTimeout = time.Duration(cfg.Postgres.Pool.ConnectTimeout) * time.Second
+	poolConfig.ConnConfig.RuntimeParams["application_name"] = "onefeed-backend"
+
+	pool, err = pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
 	if err = pool.Ping(ctx); err != nil {
@@ -37,6 +55,20 @@ func InitDB() error {
 
 func GetPool() *pgxpool.Pool {
 	return pool
+}
+
+func CloseDB() {
+	if pool != nil {
+		pool.Close()
+	}
+}
+
+// GetPoolStats returns connection pool statistics for monitoring
+func GetPoolStats() *pgxpool.Stat {
+	if pool == nil {
+		return nil
+	}
+	return pool.Stat()
 }
 
 func buildPostgresDSN() (string, error) {

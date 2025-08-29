@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -32,26 +33,58 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 		return dto.Response{}, err
 	}
 
-	var newsItems []bulkInsertNewsParams
+	// Pre-allocate slice with estimated capacity (avg 20 items per source)
+	newsItems := make([]bulkInsertNewsParams, 0, len(sources)*20)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
+	// Create HTTP client with timeout
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 	parser := gofeed.NewParser()
+	parser.Client = httpClient
 
 	log.Println("Collecting news from:", len(sources), "sources")
+	
+	// Create a context with timeout for the entire collection process
+	collectCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
 	for _, source := range sources {
 		wg.Add(1)
 		go func(src onefeed_th_sqlc.Source) {
 			defer wg.Done()
 
-			feeds, err := parser.ParseURL(src.RssUrl.String)
+			// Check if context is already cancelled
+			select {
+			case <-collectCtx.Done():
+				log.Printf("Context cancelled for source %s: %v", src.Name, collectCtx.Err())
+				return
+			default:
+			}
+
+			// Create individual timeout for each RSS feed
+			feedCtx, feedCancel := context.WithTimeout(collectCtx, 30*time.Second)
+			defer feedCancel()
+
+			feeds, err := parser.ParseURLWithContext(src.RssUrl.String, feedCtx)
 			if err != nil {
 				log.Println("Error fetching/parsing RSS feed from", src.RssUrl.String, ":", err)
 				return
 			}
 
-			var localItems []bulkInsertNewsParams
+			// Pre-allocate local items slice based on feed size
+			localItems := make([]bulkInsertNewsParams, 0, len(feeds.Items))
 			for _, item := range feeds.Items {
+				// Check for cancellation during processing
+				select {
+				case <-feedCtx.Done():
+					log.Printf("Feed processing cancelled for source %s", src.Name)
+					return
+				default:
+				}
+
 				news := bulkInsertNewsParams{
 					Title:       item.Title,
 					Link:        sanitizeLink(item.Link),
@@ -68,8 +101,20 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 		}(source)
 	}
 
-	// wait for all go routines
-	wg.Wait()
+	// Wait for all goroutines with context timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// All goroutines completed normally
+	case <-collectCtx.Done():
+		log.Printf("Collection timed out: %v", collectCtx.Err())
+		return nil, fmt.Errorf("news collection timed out: %w", collectCtx.Err())
+	}
 
 	// insert into database
 	err = s.insertNewsWithBatch(ctx, newsItems)
@@ -125,13 +170,21 @@ func sanitizeLink(raw string) string {
 }
 
 func (s *service) insertNewsWithBatch(ctx context.Context, newsItems []bulkInsertNewsParams) error {
-	for i := 0; i < len(newsItems); i += 100 {
-		end := min(i+100, len(newsItems))
+	const batchSize = 100
+	
+	for i := 0; i < len(newsItems); i += batchSize {
+		end := min(i+batchSize, len(newsItems))
 		batch := newsItems[i:end]
 
-		// Build query string
+		// Pre-allocate slice capacity for better memory efficiency
+		args := make([]interface{}, 0, len(batch)*5)
+		
+		// Pre-allocate strings.Builder with estimated capacity
 		var sb strings.Builder
-		args := []interface{}{}
+		// Estimate: base query + (placeholder chars * items) + commas
+		estimatedSize := 80 + (len(batch) * 25) + len(batch)
+		sb.Grow(estimatedSize)
+		
 		sb.WriteString(`INSERT INTO news (title, link, source, image_url, publish_date, fetched_at) VALUES `)
 
 		for j, item := range batch {
@@ -142,6 +195,7 @@ func (s *service) insertNewsWithBatch(ctx context.Context, newsItems []bulkInser
 				sb.WriteString(",")
 			}
 
+			// Append to pre-allocated slice
 			args = append(args,
 				item.Title,
 				item.Link,

@@ -31,10 +31,29 @@ func InitRedis(ctx context.Context) error {
 		return fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
 	}
 
+	// Get pool configuration from config
+	poolCfg := config.Redis.Pool
+	
 	client = redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", host, port),
 		Password: password,
 		DB:       0, // use default DB
+		
+		// Connection pool settings from config
+		PoolSize:        poolCfg.PoolSize,
+		MinIdleConns:    poolCfg.MinIdleConns,
+		MaxIdleConns:    poolCfg.MaxIdleConns,
+		PoolTimeout:     time.Duration(poolCfg.PoolTimeout) * time.Second,
+		
+		// Timeouts from config
+		DialTimeout:  time.Duration(poolCfg.DialTimeout) * time.Second,
+		ReadTimeout:  time.Duration(poolCfg.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(poolCfg.WriteTimeout) * time.Second,
+		
+		// Retry settings from config
+		MaxRetries:      poolCfg.MaxRetries,
+		MinRetryBackoff: time.Duration(poolCfg.MinRetryBackoff) * time.Millisecond,
+		MaxRetryBackoff: time.Duration(poolCfg.MaxRetryBackoff) * time.Millisecond,
 	})
 
 	if err := client.Ping(ctx).Err(); err != nil {
@@ -46,6 +65,21 @@ func InitRedis(ctx context.Context) error {
 
 func GetClient() *redis.Client {
 	return client
+}
+
+func CloseRedis() error {
+	if client != nil {
+		return client.Close()
+	}
+	return nil
+}
+
+// GetRedisStats returns Redis connection pool statistics for monitoring
+func GetRedisStats() *redis.PoolStats {
+	if client == nil {
+		return nil
+	}
+	return client.PoolStats()
 }
 
 type RedisClient interface {

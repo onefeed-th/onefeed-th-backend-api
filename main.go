@@ -25,11 +25,11 @@ func main() {
 	defer stop()
 
 	// initialize configuration
-	cfg, err := config.ResolveConfigFromFile(ctx, "config/config.yaml")
-	if err != nil {
-		log.Println("Failed to load configuration:", err)
+	if err := config.Init(ctx, "config/config.yaml"); err != nil {
+		log.Printf("Failed to initialize configuration: %v", err)
 		return
 	}
+	cfg := config.GetConfig()
 
 	// initialize database
 	if err := db.InitDB(); err != nil {
@@ -77,11 +77,23 @@ func main() {
 	<-ctx.Done()
 	log.Println("Shutting down server...")
 
-	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// Shutdown HTTP server
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Server shutdown failed: %v\n", err)
+	}
+
+	// Close database connections
+	db.CloseDB()
+	log.Println("Database connections closed")
+
+	// Close Redis connections
+	if err := rds.CloseRedis(); err != nil {
+		log.Printf("Redis shutdown failed: %v\n", err)
+	} else {
+		log.Println("Redis connections closed")
 	}
 
 	log.Println("Server gracefully stopped")
