@@ -13,6 +13,7 @@ import (
 	"github.com/onefeed-th/onefeed-th-backend-api/config"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/core/rds"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/db"
+	"github.com/onefeed-th/onefeed-th-backend-api/internal/logger"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/middleware"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/repository"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/routes"
@@ -94,6 +95,11 @@ func main() {
 		log.Printf("Redis shutdown failed: %v\n", err)
 	} else {
 		log.Println("Redis connections closed")
+	}
+
+	// Sync logger to flush any buffered entries
+	if err := logger.Sync(); err != nil {
+		log.Printf("Logger sync failed: %v\n", err)
 	}
 
 	log.Println("Server gracefully stopped")

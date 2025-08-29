@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -12,7 +11,9 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/dto"
+	"github.com/onefeed-th/onefeed-th-backend-api/internal/logger"
 	onefeed_th_sqlc "github.com/onefeed-th/onefeed-th-backend-api/internal/sqlc/onefeed_th_sqlc/db"
+	"go.uber.org/zap"
 )
 
 type CollectorService interface {
@@ -28,8 +29,11 @@ type bulkInsertNewsParams struct {
 }
 
 func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankRequest) (any, error) {
+	log := logger.New("collector-service")
+	
 	sources, err := s.repo.SourceRepository.GetAllSources(ctx)
 	if err != nil {
+		log.Error(ctx, "Failed to get sources", zap.Error(err))
 		return dto.Response{}, err
 	}
 
@@ -45,7 +49,9 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 	parser := gofeed.NewParser()
 	parser.Client = httpClient
 
-	log.Println("Collecting news from:", len(sources), "sources")
+	log.Info(ctx, "Starting news collection", 
+		zap.Int("source_count", len(sources)),
+	)
 	
 	// Create a context with timeout for the entire collection process
 	collectCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -59,7 +65,10 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 			// Check if context is already cancelled
 			select {
 			case <-collectCtx.Done():
-				log.Printf("Context cancelled for source %s: %v", src.Name, collectCtx.Err())
+				log.Warn(ctx, "Context cancelled for source", 
+					zap.String("source", src.Name),
+					zap.Error(collectCtx.Err()),
+				)
 				return
 			default:
 			}
@@ -70,7 +79,11 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 
 			feeds, err := parser.ParseURLWithContext(src.RssUrl.String, feedCtx)
 			if err != nil {
-				log.Println("Error fetching/parsing RSS feed from", src.RssUrl.String, ":", err)
+				log.Error(ctx, "Error parsing RSS feed", 
+					zap.String("source", src.Name),
+					zap.String("rss_url", src.RssUrl.String),
+					zap.Error(err),
+				)
 				return
 			}
 
@@ -80,7 +93,9 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 				// Check for cancellation during processing
 				select {
 				case <-feedCtx.Done():
-					log.Printf("Feed processing cancelled for source %s", src.Name)
+					log.Warn(ctx, "Feed processing cancelled", 
+						zap.String("source", src.Name),
+					)
 					return
 				default:
 				}
@@ -111,23 +126,34 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 	select {
 	case <-done:
 		// All goroutines completed normally
+		log.Debug(ctx, "All RSS feeds processed successfully")
 	case <-collectCtx.Done():
-		log.Printf("Collection timed out: %v", collectCtx.Err())
+		log.Error(ctx, "Collection timed out", zap.Error(collectCtx.Err()))
 		return nil, fmt.Errorf("news collection timed out: %w", collectCtx.Err())
 	}
 
 	// insert into database
+	log.Info(ctx, "Inserting news items into database", 
+		zap.Int("total_items", len(newsItems)),
+	)
+	
 	err = s.insertNewsWithBatch(ctx, newsItems)
 	if err != nil {
-		log.Println("Error inserting news items into database:", err)
+		log.Error(ctx, "Error inserting news items into database", zap.Error(err))
 		return nil, err
 	}
 
+	// Clear news cache
 	err = s.redis.RemoveKeyContaining(ctx, "news")
 	if err != nil {
-		log.Println("Error removing keys from Redis:", err)
+		log.Error(ctx, "Error removing news cache keys", zap.Error(err))
 		return nil, err
 	}
+
+	log.Info(ctx, "News collection completed successfully", 
+		zap.Int("total_items", len(newsItems)),
+		zap.Int("source_count", len(sources)),
+	)
 
 	return nil, nil
 }

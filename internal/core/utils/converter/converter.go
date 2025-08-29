@@ -33,3 +33,7 @@ func PGTypeTimestampToTime(s pgtype.Timestamp) time.Time {
 	}
 	return s.Time
 }
+
+func Int32ToInt(s int32) int {
+	return int(s)
+}
