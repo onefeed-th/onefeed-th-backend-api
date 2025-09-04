@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/core/utils/converter"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/dto"
 	apperrors "github.com/onefeed-th/onefeed-th-backend-api/internal/errors"
-	"github.com/onefeed-th/onefeed-th-backend-api/internal/logger"
 	onefeed_th_sqlc "github.com/onefeed-th/onefeed-th-backend-api/internal/sqlc/onefeed_th_sqlc/db"
 	"github.com/redis/go-redis/v9"
 )
@@ -35,8 +35,7 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 	var responses []dto.NewsListGetResponse
 	redisKey := fmt.Sprintf("news:source=%v:page=%d:limit=%d", req.Source, req.Page, req.Limit)
 
-	log := logger.New("news-service")
-	log.Debug(ctx, "Starting news retrieval",
+	slog.Debug("Starting news retrieval",
 		"sources", req.Source,
 		"page", converter.Int32ToInt(req.Page),
 		"limit", converter.Int32ToInt(req.Limit),
@@ -47,7 +46,7 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 	err := s.redis.Get(ctx, redisKey, &responses)
 	if err == nil && len(responses) > 0 {
 		// Cache hit - return cached data
-		log.Info(ctx, "Cache hit",
+		slog.Info("Cache hit",
 			"cache_key", redisKey,
 			"items_count", len(responses),
 		)
@@ -59,7 +58,7 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 			WithCode("CACHE_GET_FAILED").
 			WithDetails(fmt.Sprintf("key: %s", redisKey))
 
-		log.Warn(ctx, "Cache retrieval failed, continuing with database query",
+		slog.Warn("Cache retrieval failed, continuing with database query",
 			"cache_key", redisKey,
 			"error_code", "CACHE_GET_FAILED",
 			"error", err,
@@ -68,7 +67,7 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 	}
 
 	// Cache miss or error - query database
-	log.Debug(ctx, "Cache miss, querying database",
+	slog.Debug("Cache miss, querying database",
 		"cache_key", redisKey,
 	)
 
@@ -78,7 +77,7 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 		PageLimit:  req.Limit,
 	})
 	if err != nil {
-		log.Error(ctx, "Database query failed",
+		slog.Error("Database query failed",
 			"sources", req.Source,
 			"page", req.Page,
 			"limit", req.Limit,
@@ -106,7 +105,7 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 	// Cache the result for future requests
 	err = s.redis.Set(ctx, redisKey, responses)
 	if err != nil {
-		log.Warn(ctx, "Failed to cache news data",
+		slog.Warn("Failed to cache news data",
 			"cache_key", redisKey,
 			"items_count", len(responses),
 			"error_code", "CACHE_SET_FAILED",
@@ -114,13 +113,13 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 		)
 		// Don't fail the request if caching fails
 	} else {
-		log.Debug(ctx, "Successfully cached news data",
+		slog.Debug("Successfully cached news data",
 			"cache_key", redisKey,
 			"items_count", len(responses),
 		)
 	}
 
-	log.Info(ctx, "News retrieval completed",
+	slog.Info("News retrieval completed",
 		"sources", req.Source,
 		"page", converter.Int32ToInt(req.Page),
 		"limit", converter.Int32ToInt(req.Limit),
@@ -131,14 +130,13 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 }
 
 func (s *service) RemoveOldNews(ctx context.Context, req dto.BlankRequest) (any, error) {
-	log := logger.New("news-service")
-	log.Info(ctx, "Starting old news removal",
+	slog.Info("Starting old news removal",
 		"retention_days", 30,
 	)
 
 	err := s.repo.NewsRepository.RemoveNewsByPublishedDate(ctx)
 	if err != nil {
-		log.Error(ctx, "Failed to remove old news",
+		slog.Error("Failed to remove old news",
 			"retention_days", 30,
 			"error", err,
 		)
@@ -147,7 +145,7 @@ func (s *service) RemoveOldNews(ctx context.Context, req dto.BlankRequest) (any,
 			WithCaller()
 	}
 
-	log.Info(ctx, "Successfully removed old news",
+	slog.Info("Successfully removed old news",
 		"retention_days", 30,
 	)
 	return nil, nil

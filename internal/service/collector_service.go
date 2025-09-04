@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -11,7 +12,6 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/dto"
-	"github.com/onefeed-th/onefeed-th-backend-api/internal/logger"
 	onefeed_th_sqlc "github.com/onefeed-th/onefeed-th-backend-api/internal/sqlc/onefeed_th_sqlc/db"
 )
 
@@ -28,11 +28,9 @@ type bulkInsertNewsParams struct {
 }
 
 func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankRequest) (any, error) {
-	log := logger.New("collector-service")
-	
 	sources, err := s.repo.SourceRepository.GetAllSources(ctx)
 	if err != nil {
-		log.Error(ctx, "Failed to get sources", "error", err)
+		slog.Error("Failed to get sources", "error", err)
 		return dto.Response{}, err
 	}
 
@@ -48,10 +46,10 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 	parser := gofeed.NewParser()
 	parser.Client = httpClient
 
-	log.Info(ctx, "Starting news collection", 
+	slog.Info("Starting news collection",
 		"source_count", len(sources),
 	)
-	
+
 	// Create a context with timeout for the entire collection process
 	collectCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
@@ -64,7 +62,7 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 			// Check if context is already cancelled
 			select {
 			case <-collectCtx.Done():
-				log.Warn(ctx, "Context cancelled for source", 
+				slog.Warn("Context cancelled for source",
 					"source", src.Name,
 					"error", collectCtx.Err(),
 				)
@@ -78,7 +76,7 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 
 			feeds, err := parser.ParseURLWithContext(src.RssUrl.String, feedCtx)
 			if err != nil {
-				log.Error(ctx, "Error parsing RSS feed", 
+				slog.Error("Error parsing RSS feed",
 					"source", src.Name,
 					"rss_url", src.RssUrl.String,
 					"error", err,
@@ -92,7 +90,7 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 				// Check for cancellation during processing
 				select {
 				case <-feedCtx.Done():
-					log.Warn(ctx, "Feed processing cancelled", 
+					slog.Warn("Feed processing cancelled",
 						"source", src.Name,
 					)
 					return
@@ -125,31 +123,31 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 	select {
 	case <-done:
 		// All goroutines completed normally
-		log.Debug(ctx, "All RSS feeds processed successfully")
+		slog.Debug("All RSS feeds processed successfully")
 	case <-collectCtx.Done():
-		log.Error(ctx, "Collection timed out", "error", collectCtx.Err())
+		slog.Error("Collection timed out", "error", collectCtx.Err())
 		return nil, fmt.Errorf("news collection timed out: %w", collectCtx.Err())
 	}
 
 	// insert into database
-	log.Info(ctx, "Inserting news items into database", 
+	slog.Info("Inserting news items into database",
 		"total_items", len(newsItems),
 	)
-	
+
 	err = s.insertNewsWithBatch(ctx, newsItems)
 	if err != nil {
-		log.Error(ctx, "Error inserting news items into database", "error", err)
+		slog.Error("Error inserting news items into database", "error", err)
 		return nil, err
 	}
 
 	// Clear news cache
 	err = s.redis.RemoveKeyContaining(ctx, "news")
 	if err != nil {
-		log.Error(ctx, "Error removing news cache keys", "error", err)
+		slog.Error("Error removing news cache keys", "error", err)
 		return nil, err
 	}
 
-	log.Info(ctx, "News collection completed successfully", 
+	slog.Info("News collection completed successfully",
 		"total_items", len(newsItems),
 		"source_count", len(sources),
 	)
@@ -196,20 +194,20 @@ func sanitizeLink(raw string) string {
 
 func (s *service) insertNewsWithBatch(ctx context.Context, newsItems []bulkInsertNewsParams) error {
 	const batchSize = 100
-	
+
 	for i := 0; i < len(newsItems); i += batchSize {
 		end := min(i+batchSize, len(newsItems))
 		batch := newsItems[i:end]
 
 		// Pre-allocate slice capacity for better memory efficiency
 		args := make([]interface{}, 0, len(batch)*5)
-		
+
 		// Pre-allocate strings.Builder with estimated capacity
 		var sb strings.Builder
 		// Estimate: base query + (placeholder chars * items) + commas
 		estimatedSize := 80 + (len(batch) * 25) + len(batch)
 		sb.Grow(estimatedSize)
-		
+
 		sb.WriteString(`INSERT INTO news (title, link, source, image_url, publish_date, fetched_at) VALUES `)
 
 		for j, item := range batch {
