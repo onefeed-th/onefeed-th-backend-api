@@ -20,15 +20,15 @@ func LogRequest(next http.Handler) http.Handler {
 		if r.Body != nil {
 			bodyBytes, err := io.ReadAll(r.Body)
 			if err != nil {
-				slog.Error("Error reading request body: %v\n", err)
+				slog.Error("Error reading request body", "error", err)
 			} else {
-				slog.Info("Request body: %s\n", bodyBytes)
+				slog.Info("Request body", "body", string(bodyBytes))
 				r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			}
 		}
 
 		next.ServeHTTP(w, r)
 
-		slog.Info("Request duration: %v\n", time.Since(start))
+		slog.Info("Request finished", "duration", time.Since(start))
 	})
 }
