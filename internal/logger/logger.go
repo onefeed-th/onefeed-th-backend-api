@@ -2,33 +2,30 @@ package logger
 
 import (
 	"context"
+	"log/slog"
 	"os"
-	"strings"
 	"sync"
-
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
-// Logger interface defines logging methods with zap compatibility
+// Logger interface defines logging methods with slog compatibility
 type Logger interface {
-	Debug(ctx context.Context, message string, fields ...zap.Field)
-	Info(ctx context.Context, message string, fields ...zap.Field)
-	Warn(ctx context.Context, message string, fields ...zap.Field)
-	Error(ctx context.Context, message string, fields ...zap.Field)
-	Fatal(ctx context.Context, message string, fields ...zap.Field)
-	With(fields ...zap.Field) Logger
+	Debug(ctx context.Context, message string, args ...any)
+	Info(ctx context.Context, message string, args ...any)
+	Warn(ctx context.Context, message string, args ...any)
+	Error(ctx context.Context, message string, args ...any)
+	Fatal(ctx context.Context, message string, args ...any)
+	With(args ...any) Logger
 	WithService(service string) Logger
 	Sync() error
 }
 
-type zapLogger struct {
-	logger  *zap.Logger
+type slogLogger struct {
+	logger  *slog.Logger
 	service string
 }
 
 var (
-	defaultLogger *zapLogger
+	defaultLogger *slogLogger
 	once          sync.Once
 )
 
@@ -36,48 +33,35 @@ func init() {
 	InitLogger()
 }
 
-// InitLogger initializes the global zap logger with optimized configuration
+// InitLogger initializes the global slog logger with optimized configuration
 func InitLogger() {
 	once.Do(func() {
-		// Production-optimized configuration
-		config := zap.NewProductionConfig()
-		
-		// Use JSON encoding for structured logs
-		config.Encoding = "json"
-		
 		// Set log level from environment or default to INFO
-		logLevel := os.Getenv("LOG_LEVEL")
-		switch logLevel {
+		var logLevel slog.Level
+		switch os.Getenv("LOG_LEVEL") {
 		case "DEBUG":
-			config.Level.SetLevel(zapcore.DebugLevel)
+			logLevel = slog.LevelDebug
 		case "INFO":
-			config.Level.SetLevel(zapcore.InfoLevel)
+			logLevel = slog.LevelInfo
 		case "WARN":
-			config.Level.SetLevel(zapcore.WarnLevel)
+			logLevel = slog.LevelWarn
 		case "ERROR":
-			config.Level.SetLevel(zapcore.ErrorLevel)
+			logLevel = slog.LevelError
 		default:
-			config.Level.SetLevel(zapcore.InfoLevel)
+			logLevel = slog.LevelInfo
 		}
 
-		// Add caller info for debugging
-		config.DisableCaller = false
-		config.DisableStacktrace = false
-
-		// Custom time format
-		config.EncoderConfig.TimeKey = "timestamp"
-		config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-
-		// Add service field to all logs
-		logger, err := config.Build(
-			zap.AddCallerSkip(1), // Skip wrapper function in stack trace
-		)
-		if err != nil {
-			panic("Failed to initialize logger: " + err.Error())
+		// Create handler with JSON format and custom options
+		opts := &slog.HandlerOptions{
+			Level:     logLevel,
+			AddSource: true, // Add caller info for debugging
 		}
 
-		defaultLogger = &zapLogger{
-			logger:  logger.With(zap.String("service", "onefeed-backend")),
+		handler := slog.NewJSONHandler(os.Stdout, opts)
+		logger := slog.New(handler)
+
+		defaultLogger = &slogLogger{
+			logger:  logger.With("service", "onefeed-backend"),
 			service: "onefeed-backend",
 		}
 	})
@@ -85,8 +69,8 @@ func InitLogger() {
 
 // New creates a new logger with the specified service name
 func New(service string) Logger {
-	return &zapLogger{
-		logger:  defaultLogger.logger.With(zap.String("service", service)),
+	return &slogLogger{
+		logger:  defaultLogger.logger.With("service", service),
 		service: service,
 	}
 }
@@ -96,106 +80,93 @@ func GetDefault() Logger {
 	return defaultLogger
 }
 
-// SetLevel sets the global log level
-func SetLevel(level zapcore.Level) {
-	defaultLogger.logger.Core().Enabled(level)
-}
-
-func (l *zapLogger) WithService(service string) Logger {
-	return &zapLogger{
-		logger:  l.logger.With(zap.String("service", service)),
+func (l *slogLogger) WithService(service string) Logger {
+	return &slogLogger{
+		logger:  l.logger.With("service", service),
 		service: service,
 	}
 }
 
-func (l *zapLogger) With(fields ...zap.Field) Logger {
-	return &zapLogger{
-		logger:  l.logger.With(fields...),
+func (l *slogLogger) With(args ...any) Logger {
+	return &slogLogger{
+		logger:  l.logger.With(args...),
 		service: l.service,
 	}
 }
 
-func (l *zapLogger) Debug(ctx context.Context, message string, fields ...zap.Field) {
-	l.logger.Debug(message, l.addContextFields(ctx, fields...)...)
+func (l *slogLogger) Debug(ctx context.Context, message string, args ...any) {
+	l.logger.DebugContext(ctx, message, l.addContextArgs(ctx, args...)...)
 }
 
-func (l *zapLogger) Info(ctx context.Context, message string, fields ...zap.Field) {
-	l.logger.Info(message, l.addContextFields(ctx, fields...)...)
+func (l *slogLogger) Info(ctx context.Context, message string, args ...any) {
+	l.logger.InfoContext(ctx, message, l.addContextArgs(ctx, args...)...)
 }
 
-func (l *zapLogger) Warn(ctx context.Context, message string, fields ...zap.Field) {
-	l.logger.Warn(message, l.addContextFields(ctx, fields...)...)
+func (l *slogLogger) Warn(ctx context.Context, message string, args ...any) {
+	l.logger.WarnContext(ctx, message, l.addContextArgs(ctx, args...)...)
 }
 
-func (l *zapLogger) Error(ctx context.Context, message string, fields ...zap.Field) {
-	l.logger.Error(message, l.addContextFields(ctx, fields...)...)
+func (l *slogLogger) Error(ctx context.Context, message string, args ...any) {
+	l.logger.ErrorContext(ctx, message, l.addContextArgs(ctx, args...)...)
 }
 
-func (l *zapLogger) Fatal(ctx context.Context, message string, fields ...zap.Field) {
-	l.logger.Fatal(message, l.addContextFields(ctx, fields...)...)
+func (l *slogLogger) Fatal(ctx context.Context, message string, args ...any) {
+	l.logger.ErrorContext(ctx, message, l.addContextArgs(ctx, args...)...)
+	os.Exit(1)
 }
 
-func (l *zapLogger) Sync() error {
-	// Sync can fail on stderr/stdout on some systems, which is not critical
-	// We'll ignore these specific errors
-	if err := l.logger.Sync(); err != nil {
-		// Ignore sync errors for stderr/stdout as they're not critical
-		if strings.Contains(err.Error(), "sync /dev/stderr") || 
-		   strings.Contains(err.Error(), "sync /dev/stdout") ||
-		   strings.Contains(err.Error(), "inappropriate ioctl for device") {
-			return nil
-		}
-		return err
-	}
+func (l *slogLogger) Sync() error {
+	// slog doesn't require explicit sync like zap
+	// This method exists for interface compatibility
 	return nil
 }
 
-// addContextFields extracts fields from context and adds them to log fields
-func (l *zapLogger) addContextFields(ctx context.Context, fields ...zap.Field) []zap.Field {
+// addContextArgs extracts fields from context and adds them to log args
+func (l *slogLogger) addContextArgs(ctx context.Context, args ...any) []any {
 	if ctx == nil {
-		return fields
+		return args
 	}
 
-	contextFields := []zap.Field{}
+	var contextArgs []any
 	
 	// Extract trace ID from context
 	if traceID, ok := ctx.Value("trace_id").(string); ok && traceID != "" {
-		contextFields = append(contextFields, zap.String("trace_id", traceID))
+		contextArgs = append(contextArgs, "trace_id", traceID)
 	}
 	
 	// Extract user ID from context  
 	if userID, ok := ctx.Value("user_id").(string); ok && userID != "" {
-		contextFields = append(contextFields, zap.String("user_id", userID))
+		contextArgs = append(contextArgs, "user_id", userID)
 	}
 	
 	// Extract request ID from context
 	if requestID, ok := ctx.Value("request_id").(string); ok && requestID != "" {
-		contextFields = append(contextFields, zap.String("request_id", requestID))
+		contextArgs = append(contextArgs, "request_id", requestID)
 	}
 
-	// Combine context fields with provided fields
-	return append(contextFields, fields...)
+	// Combine context args with provided args
+	return append(contextArgs, args...)
 }
 
 // Convenience functions using default logger
-func Debug(ctx context.Context, message string, fields ...zap.Field) {
-	defaultLogger.Debug(ctx, message, fields...)
+func Debug(ctx context.Context, message string, args ...any) {
+	defaultLogger.Debug(ctx, message, args...)
 }
 
-func Info(ctx context.Context, message string, fields ...zap.Field) {
-	defaultLogger.Info(ctx, message, fields...)
+func Info(ctx context.Context, message string, args ...any) {
+	defaultLogger.Info(ctx, message, args...)
 }
 
-func Warn(ctx context.Context, message string, fields ...zap.Field) {
-	defaultLogger.Warn(ctx, message, fields...)
+func Warn(ctx context.Context, message string, args ...any) {
+	defaultLogger.Warn(ctx, message, args...)
 }
 
-func Error(ctx context.Context, message string, fields ...zap.Field) {
-	defaultLogger.Error(ctx, message, fields...)
+func Error(ctx context.Context, message string, args ...any) {
+	defaultLogger.Error(ctx, message, args...)
 }
 
-func Fatal(ctx context.Context, message string, fields ...zap.Field) {
-	defaultLogger.Fatal(ctx, message, fields...)
+func Fatal(ctx context.Context, message string, args ...any) {
+	defaultLogger.Fatal(ctx, message, args...)
 }
 
 // Sync flushes any buffered log entries

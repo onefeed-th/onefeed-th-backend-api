@@ -13,7 +13,6 @@ import (
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/dto"
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/logger"
 	onefeed_th_sqlc "github.com/onefeed-th/onefeed-th-backend-api/internal/sqlc/onefeed_th_sqlc/db"
-	"go.uber.org/zap"
 )
 
 type CollectorService interface {
@@ -33,7 +32,7 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 	
 	sources, err := s.repo.SourceRepository.GetAllSources(ctx)
 	if err != nil {
-		log.Error(ctx, "Failed to get sources", zap.Error(err))
+		log.Error(ctx, "Failed to get sources", "error", err)
 		return dto.Response{}, err
 	}
 
@@ -50,7 +49,7 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 	parser.Client = httpClient
 
 	log.Info(ctx, "Starting news collection", 
-		zap.Int("source_count", len(sources)),
+		"source_count", len(sources),
 	)
 	
 	// Create a context with timeout for the entire collection process
@@ -66,8 +65,8 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 			select {
 			case <-collectCtx.Done():
 				log.Warn(ctx, "Context cancelled for source", 
-					zap.String("source", src.Name),
-					zap.Error(collectCtx.Err()),
+					"source", src.Name,
+					"error", collectCtx.Err(),
 				)
 				return
 			default:
@@ -80,9 +79,9 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 			feeds, err := parser.ParseURLWithContext(src.RssUrl.String, feedCtx)
 			if err != nil {
 				log.Error(ctx, "Error parsing RSS feed", 
-					zap.String("source", src.Name),
-					zap.String("rss_url", src.RssUrl.String),
-					zap.Error(err),
+					"source", src.Name,
+					"rss_url", src.RssUrl.String,
+					"error", err,
 				)
 				return
 			}
@@ -94,7 +93,7 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 				select {
 				case <-feedCtx.Done():
 					log.Warn(ctx, "Feed processing cancelled", 
-						zap.String("source", src.Name),
+						"source", src.Name,
 					)
 					return
 				default:
@@ -128,31 +127,31 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 		// All goroutines completed normally
 		log.Debug(ctx, "All RSS feeds processed successfully")
 	case <-collectCtx.Done():
-		log.Error(ctx, "Collection timed out", zap.Error(collectCtx.Err()))
+		log.Error(ctx, "Collection timed out", "error", collectCtx.Err())
 		return nil, fmt.Errorf("news collection timed out: %w", collectCtx.Err())
 	}
 
 	// insert into database
 	log.Info(ctx, "Inserting news items into database", 
-		zap.Int("total_items", len(newsItems)),
+		"total_items", len(newsItems),
 	)
 	
 	err = s.insertNewsWithBatch(ctx, newsItems)
 	if err != nil {
-		log.Error(ctx, "Error inserting news items into database", zap.Error(err))
+		log.Error(ctx, "Error inserting news items into database", "error", err)
 		return nil, err
 	}
 
 	// Clear news cache
 	err = s.redis.RemoveKeyContaining(ctx, "news")
 	if err != nil {
-		log.Error(ctx, "Error removing news cache keys", zap.Error(err))
+		log.Error(ctx, "Error removing news cache keys", "error", err)
 		return nil, err
 	}
 
 	log.Info(ctx, "News collection completed successfully", 
-		zap.Int("total_items", len(newsItems)),
-		zap.Int("source_count", len(sources)),
+		"total_items", len(newsItems),
+		"source_count", len(sources),
 	)
 
 	return nil, nil

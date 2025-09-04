@@ -8,7 +8,6 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/redis/go-redis/v9 v9.12.1
 	github.com/spf13/viper v1.20.1
-	go.uber.org/zap v1.27.0
 )
 
 require (

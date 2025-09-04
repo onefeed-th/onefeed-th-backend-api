@@ -11,7 +11,6 @@ import (
 	"github.com/onefeed-th/onefeed-th-backend-api/internal/logger"
 	onefeed_th_sqlc "github.com/onefeed-th/onefeed-th-backend-api/internal/sqlc/onefeed_th_sqlc/db"
 	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 )
 
 type NewsService interface {
@@ -37,20 +36,20 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 	redisKey := fmt.Sprintf("news:source=%v:page=%d:limit=%d", req.Source, req.Page, req.Limit)
 
 	log := logger.New("news-service")
-	log.Debug(ctx, "Starting news retrieval", 
-		zap.Any("sources", req.Source),
-		zap.Int("page", converter.Int32ToInt(req.Page)),
-		zap.Int("limit", converter.Int32ToInt(req.Limit)),
-		zap.String("cache_key", redisKey),
+	log.Debug(ctx, "Starting news retrieval",
+		"sources", req.Source,
+		"page", converter.Int32ToInt(req.Page),
+		"limit", converter.Int32ToInt(req.Limit),
+		"cache_key", redisKey,
 	)
 
 	// Try to get from cache first
 	err := s.redis.Get(ctx, redisKey, &responses)
 	if err == nil && len(responses) > 0 {
 		// Cache hit - return cached data
-		log.Info(ctx, "Cache hit", 
-			zap.String("cache_key", redisKey),
-			zap.Int("items_count", len(responses)),
+		log.Info(ctx, "Cache hit",
+			"cache_key", redisKey,
+			"items_count", len(responses),
 		)
 		return responses, nil
 	}
@@ -60,17 +59,17 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 			WithCode("CACHE_GET_FAILED").
 			WithDetails(fmt.Sprintf("key: %s", redisKey))
 
-		log.Warn(ctx, "Cache retrieval failed, continuing with database query", 
-			zap.String("cache_key", redisKey),
-			zap.String("error_code", "CACHE_GET_FAILED"),
-			zap.Error(err),
+		log.Warn(ctx, "Cache retrieval failed, continuing with database query",
+			"cache_key", redisKey,
+			"error_code", "CACHE_GET_FAILED",
+			"error", err,
 		)
 		// Don't return the error (fail gracefully)
 	}
 
 	// Cache miss or error - query database
-	log.Debug(ctx, "Cache miss, querying database", 
-		zap.String("cache_key", redisKey),
+	log.Debug(ctx, "Cache miss, querying database",
+		"cache_key", redisKey,
 	)
 
 	news, err := s.repo.NewsRepository.GetNews(ctx, onefeed_th_sqlc.ListNewsParams{
@@ -79,12 +78,12 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 		PageLimit:  req.Limit,
 	})
 	if err != nil {
-		log.Error(ctx, "Database query failed", 
-			zap.Any("sources", req.Source),
-			zap.Int("page", converter.Int32ToInt(req.Page)),
-			zap.Int("limit", converter.Int32ToInt(req.Limit)),
-			zap.Int("offset", (converter.Int32ToInt(req.Page)-1)*converter.Int32ToInt(req.Limit)),
-			zap.Error(err),
+		log.Error(ctx, "Database query failed",
+			"sources", req.Source,
+			"page", req.Page,
+			"limit", req.Limit,
+			"offset", (req.Page-1)*req.Limit,
+			"error", err,
 		)
 		return nil, apperrors.Wrap(err, apperrors.DatabaseError, "failed to retrieve news from database").
 			WithCode("DB_QUERY_FAILED").
@@ -107,25 +106,25 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 	// Cache the result for future requests
 	err = s.redis.Set(ctx, redisKey, responses)
 	if err != nil {
-		log.Warn(ctx, "Failed to cache news data", 
-			zap.String("cache_key", redisKey),
-			zap.Int("items_count", len(responses)),
-			zap.String("error_code", "CACHE_SET_FAILED"),
-			zap.Error(err),
+		log.Warn(ctx, "Failed to cache news data",
+			"cache_key", redisKey,
+			"items_count", len(responses),
+			"error_code", "CACHE_SET_FAILED",
+			"error", err,
 		)
 		// Don't fail the request if caching fails
 	} else {
-		log.Debug(ctx, "Successfully cached news data", 
-			zap.String("cache_key", redisKey),
-			zap.Int("items_count", len(responses)),
+		log.Debug(ctx, "Successfully cached news data",
+			"cache_key", redisKey,
+			"items_count", len(responses),
 		)
 	}
 
-	log.Info(ctx, "News retrieval completed", 
-		zap.Any("sources", req.Source),
-		zap.Int("page", converter.Int32ToInt(req.Page)),
-		zap.Int("limit", converter.Int32ToInt(req.Limit)),
-		zap.Int("items_count", len(responses)),
+	log.Info(ctx, "News retrieval completed",
+		"sources", req.Source,
+		"page", converter.Int32ToInt(req.Page),
+		"limit", converter.Int32ToInt(req.Limit),
+		"items_count", len(responses),
 	)
 
 	return responses, nil
@@ -133,23 +132,23 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 
 func (s *service) RemoveOldNews(ctx context.Context, req dto.BlankRequest) (any, error) {
 	log := logger.New("news-service")
-	log.Info(ctx, "Starting old news removal", 
-		zap.Int("retention_days", 30),
+	log.Info(ctx, "Starting old news removal",
+		"retention_days", 30,
 	)
 
 	err := s.repo.NewsRepository.RemoveNewsByPublishedDate(ctx)
 	if err != nil {
-		log.Error(ctx, "Failed to remove old news", 
-			zap.Int("retention_days", 30),
-			zap.Error(err),
+		log.Error(ctx, "Failed to remove old news",
+			"retention_days", 30,
+			"error", err,
 		)
 		return nil, apperrors.Wrap(err, apperrors.DatabaseError, "failed to remove old news").
 			WithCode("DB_DELETE_FAILED").
 			WithCaller()
 	}
 
-	log.Info(ctx, "Successfully removed old news", 
-		zap.Int("retention_days", 30),
+	log.Info(ctx, "Successfully removed old news",
+		"retention_days", 30,
 	)
 	return nil, nil
 }

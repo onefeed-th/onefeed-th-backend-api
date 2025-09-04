@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -21,25 +20,26 @@ import (
 )
 
 func main() {
+	log := logger.New("application-go")
 	// setup signal handling
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	// initialize configuration
 	if err := config.Init(ctx, "config/config.yaml"); err != nil {
-		log.Printf("Failed to initialize configuration: %v", err)
+		log.Error(ctx, "Failed to initialize configuration", "error", err)
 		return
 	}
 	cfg := config.GetConfig()
 
 	// initialize database
 	if err := db.InitDB(); err != nil {
-		log.Println("Failed to initialize database:", err)
+		log.Error(ctx, "Failed to initialize database", "error", err)
 	}
 
 	// initialize Redis
 	if err := rds.InitRedis(ctx); err != nil {
-		log.Println("Failed to initialize Redis:", err)
+		log.Error(ctx, "Failed to initialize Redis", "error", err)
 	}
 
 	// initialize repository
@@ -63,44 +63,44 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("Starting REST Server on port %d\n", cfg.RestServer.Port)
-		log.Printf("Local : http://localhost:%d\n", cfg.RestServer.Port)
-		log.Println("waiting for request...")
+		log.Info(ctx, "Starting REST Server", "port", cfg.RestServer.Port)
+		log.Info(ctx, "Local server", "url", fmt.Sprintf("http://localhost:%d", cfg.RestServer.Port))
+		log.Info(ctx, "waiting for request...")
 
 		err := server.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("failed to served %s\n", err)
+			log.Error(ctx, "Failed to serve", "error", err)
 			stop()
 		}
 	}()
 
 	// wait for the context to be canceled (i.e., SIGINT or SIGTERM)
 	<-ctx.Done()
-	log.Println("Shutting down server...")
+	log.Info(ctx, "Shutting down server...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Shutdown HTTP server
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Server shutdown failed: %v\n", err)
+		log.Error(ctx, "Server shutdown failed", "error", err)
 	}
 
 	// Close database connections
 	db.CloseDB()
-	log.Println("Database connections closed")
+	log.Info(ctx, "Database connections closed")
 
 	// Close Redis connections
 	if err := rds.CloseRedis(); err != nil {
-		log.Printf("Redis shutdown failed: %v\n", err)
+		log.Error(ctx, "Redis shutdown failed", "error", err)
 	} else {
-		log.Println("Redis connections closed")
+		log.Info(ctx, "Redis connections closed")
 	}
 
 	// Sync logger to flush any buffered entries
 	if err := logger.Sync(); err != nil {
-		log.Printf("Logger sync failed: %v\n", err)
+		log.Error(ctx, "Logger sync failed", "error", err)
 	}
 
-	log.Println("Server gracefully stopped")
+	log.Info(ctx, "Server gracefully stopped")
 }
