@@ -15,7 +15,7 @@ func LogRequest(next http.Handler) http.Handler {
 			return
 		}
 		start := time.Now()
-		slog.Info("Received request: %s %s\n", r.Method, r.URL.Path)
+		slog.Info("Received request", "method", r.Method, "path", r.URL.Path)
 
 		if r.Body != nil {
 			bodyBytes, err := io.ReadAll(r.Body)
