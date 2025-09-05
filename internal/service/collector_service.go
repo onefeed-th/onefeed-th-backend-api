@@ -35,9 +35,7 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 	}
 
 	// Pre-allocate slice with estimated capacity (avg 20 items per source)
-	newsItems := make([]bulkInsertNewsParams, 0, len(sources)*20)
 	var wg sync.WaitGroup
-	var mu sync.Mutex
 
 	// Create HTTP client with timeout
 	httpClient := &http.Client{
@@ -54,9 +52,10 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 	collectCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	for _, source := range sources {
+	results := make([][]bulkInsertNewsParams, len(sources))
+	for i, source := range sources {
 		wg.Add(1)
-		go func(src onefeed_th_sqlc.Source) {
+		go func(i int, src onefeed_th_sqlc.Source) {
 			defer wg.Done()
 
 			// Check if context is already cancelled
@@ -86,6 +85,9 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 
 			// Pre-allocate local items slice based on feed size
 			localItems := make([]bulkInsertNewsParams, 0, len(feeds.Items))
+			newsInserts := make([]bulkInsertNewsParams, 0, len(feeds.Items))
+			links := make([]string, 0, len(feeds.Items))
+
 			for _, item := range feeds.Items {
 				// Check for cancellation during processing
 				select {
@@ -105,12 +107,41 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 					PublishDate: item.PublishedParsed,
 				}
 				localItems = append(localItems, news)
+				links = append(links, news.Link)
 			}
 
-			mu.Lock()
-			newsItems = append(newsItems, localItems...)
-			mu.Unlock()
-		}(source)
+			// check existing links in db
+			existingLinks, err := s.repo.NewsRepository.GetAllMissingLinks(ctx, links)
+			if err != nil {
+				slog.Error("Error checking existing links:", "error", err)
+				return
+			}
+
+			// filter localItems to only include new links
+			if len(existingLinks) > 0 {
+				existingLinkSet := make(map[string]struct{}, len(existingLinks))
+				for _, link := range existingLinks {
+					existingLinkSet[link] = struct{}{}
+				}
+				filteredNews := make([]bulkInsertNewsParams, 0, len(existingLinks))
+				for _, item := range localItems {
+					if _, exists := existingLinkSet[item.Link]; exists {
+						// TODO: add some upload image to server (s3, cloudflare r2) with async or not will design later
+						filteredNews = append(filteredNews, item)
+					}
+				}
+				newsInserts = filteredNews
+			}
+
+			slog.Info("Fetched items from source",
+				"source", src.Name,
+				"fetched_news", len(feeds.Items),
+				"new_news", len(newsInserts),
+			)
+
+			// Append to main slice without mutex
+			results[i] = newsInserts
+		}(i, source)
 	}
 
 	// Wait for all goroutines with context timeout
@@ -129,9 +160,15 @@ func (s *service) CollectNewsFromSource(ctx context.Context, req dto.BlankReques
 		return nil, fmt.Errorf("news collection timed out: %w", collectCtx.Err())
 	}
 
+	// Combine all results and average source item with *20
+	newsItems := make([]bulkInsertNewsParams, 0, len(sources)*20)
+	for _, item := range results {
+		newsItems = append(newsItems, item...)
+	}
+
 	// insert into database
 	slog.Info("Inserting news items into database",
-		"total_items", len(newsItems),
+		"total_news", len(newsItems),
 	)
 
 	err = s.insertNewsWithBatch(ctx, newsItems)

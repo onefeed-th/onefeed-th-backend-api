@@ -19,3 +19,11 @@ WHERE publish_date < NOW() - INTERVAL '30 days';
 -- name: GetAllSource :many
 SELECT DISTINCT source
 FROM news;
+-- name: GetAllMissingLinks :many
+WITH recv AS (
+  SELECT unnest(@links::TEXT []) AS link
+)
+SELECT r.link::TEXT AS missing_link
+FROM recv r
+  LEFT JOIN news n ON r.link = n.link
+WHERE n.link IS NULL;

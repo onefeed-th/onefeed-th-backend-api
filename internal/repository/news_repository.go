@@ -12,6 +12,7 @@ type NewsRepository interface {
 	GetNews(ctx context.Context, params onefeed_th_sqlc.ListNewsParams) ([]onefeed_th_sqlc.News, error)
 	RemoveNewsByPublishedDate(ctx context.Context) error
 	GetAllSource(ctx context.Context) ([]string, error)
+	GetAllMissingLinks(ctx context.Context, links []string) ([]string, error)
 }
 
 type NewsRepositoryImpl struct {
@@ -45,4 +46,9 @@ func (r *NewsRepositoryImpl) RemoveNewsByPublishedDate(ctx context.Context) erro
 func (r *NewsRepositoryImpl) GetAllSource(ctx context.Context) ([]string, error) {
 	query := onefeed_th_sqlc.New(r.pool)
 	return query.GetAllSource(ctx)
+}
+
+func (r *NewsRepositoryImpl) GetAllMissingLinks(ctx context.Context, links []string) ([]string, error) {
+	query := onefeed_th_sqlc.New(r.pool)
+	return query.GetAllMissingLinks(ctx, links)
 }

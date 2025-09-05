@@ -9,6 +9,36 @@ import (
 	"context"
 )
 
+const getAllMissingLinks = `-- name: GetAllMissingLinks :many
+WITH recv AS (
+  SELECT unnest($1::TEXT []) AS link
+)
+SELECT r.link::TEXT AS missing_link
+FROM recv r
+  LEFT JOIN news n ON r.link = n.link
+WHERE n.link IS NULL
+`
+
+func (q *Queries) GetAllMissingLinks(ctx context.Context, links []string) ([]string, error) {
+	rows, err := q.db.Query(ctx, getAllMissingLinks, links)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var missing_link string
+		if err := rows.Scan(&missing_link); err != nil {
+			return nil, err
+		}
+		items = append(items, missing_link)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllSource = `-- name: GetAllSource :many
 SELECT DISTINCT source
 FROM news
