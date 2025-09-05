@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -22,7 +23,16 @@ func LogRequest(next http.Handler) http.Handler {
 			if err != nil {
 				slog.Error("Error reading request body", "error", err)
 			} else {
-				slog.Info("Request body", "body", string(bodyBytes))
+				// try compact JSON
+				var compactBuf bytes.Buffer
+				if json.Compact(&compactBuf, bodyBytes) == nil {
+					slog.Info("Request body", "body", compactBuf.String())
+				} else {
+					// fallback: raw body
+					slog.Info("Request body (raw)", "body", string(bodyBytes))
+				}
+
+				// restore body for the next handler
 				r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			}
 		}

@@ -119,13 +119,6 @@ func (s *service) GetNews(ctx context.Context, req dto.NewsListGetRequest) ([]dt
 		)
 	}
 
-	slog.Info("News retrieval completed",
-		"sources", req.Source,
-		"page", converter.Int32ToInt(req.Page),
-		"limit", converter.Int32ToInt(req.Limit),
-		"items_count", len(responses),
-	)
-
 	return responses, nil
 }
 
