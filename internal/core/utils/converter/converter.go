@@ -37,3 +37,10 @@ func PGTypeTimestampToTime(s pgtype.Timestamp) time.Time {
 func Int32ToInt(s int32) int {
 	return int(s)
 }
+
+func PGTypeTextToString(s pgtype.Text) string {
+	if !s.Valid {
+		return ""
+	}
+	return s.String
+}

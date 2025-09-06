@@ -9,6 +9,8 @@ import (
 
 type SourceRepository interface {
 	GetAllSources(ctx context.Context) ([]onefeed_th_sqlc.Source, error)
+	GetAllSourcesWithPagination(ctx context.Context, req onefeed_th_sqlc.GetAllSourcesWithPaginationParams) ([]onefeed_th_sqlc.Source, error)
+	CreateSource(ctx context.Context, req onefeed_th_sqlc.CreateSourceParams) (onefeed_th_sqlc.Source, error)
 }
 
 type SourceRepositoryImpl struct {
@@ -24,4 +26,14 @@ func NewSourceRepository(pool *pgxpool.Pool) SourceRepository {
 func (r *SourceRepositoryImpl) GetAllSources(ctx context.Context) ([]onefeed_th_sqlc.Source, error) {
 	query := onefeed_th_sqlc.New(r.pool)
 	return query.GetAllSources(ctx)
+}
+
+func (r *SourceRepositoryImpl) CreateSource(ctx context.Context, req onefeed_th_sqlc.CreateSourceParams) (onefeed_th_sqlc.Source, error) {
+	query := onefeed_th_sqlc.New(r.pool)
+	return query.CreateSource(ctx, req)
+}
+
+func (r *SourceRepositoryImpl) GetAllSourcesWithPagination(ctx context.Context, req onefeed_th_sqlc.GetAllSourcesWithPaginationParams) ([]onefeed_th_sqlc.Source, error) {
+	query := onefeed_th_sqlc.New(r.pool)
+	return query.GetAllSourcesWithPagination(ctx, req)
 }

@@ -24,7 +24,7 @@ type NewsTag struct {
 }
 
 type Source struct {
-	ID        int32            `json:"id"`
+	ID        int64            `json:"id"`
 	Name      string           `json:"name"`
 	Tags      pgtype.Text      `json:"tags"`
 	RssUrl    pgtype.Text      `json:"rss_url"`

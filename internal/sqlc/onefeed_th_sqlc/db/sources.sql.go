@@ -7,7 +7,34 @@ package onefeed_th_sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const createSource = `-- name: CreateSource :one
+INSERT INTO sources (name, tags, rss_url)
+VALUES ($1, $2, $3)
+RETURNING id, name, tags, rss_url, created_at
+`
+
+type CreateSourceParams struct {
+	Name   string      `json:"name"`
+	Tags   pgtype.Text `json:"tags"`
+	RssUrl pgtype.Text `json:"rss_url"`
+}
+
+func (q *Queries) CreateSource(ctx context.Context, arg CreateSourceParams) (Source, error) {
+	row := q.db.QueryRow(ctx, createSource, arg.Name, arg.Tags, arg.RssUrl)
+	var i Source
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Tags,
+		&i.RssUrl,
+		&i.CreatedAt,
+	)
+	return i, err
+}
 
 const getAllSources = `-- name: GetAllSources :many
 SELECT id, name, tags, rss_url, created_at
@@ -16,6 +43,44 @@ FROM sources
 
 func (q *Queries) GetAllSources(ctx context.Context) ([]Source, error) {
 	rows, err := q.db.Query(ctx, getAllSources)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Source
+	for rows.Next() {
+		var i Source
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Tags,
+			&i.RssUrl,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllSourcesWithPagination = `-- name: GetAllSourcesWithPagination :many
+SELECT id, name, tags, rss_url, created_at
+FROM sources
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $1
+`
+
+type GetAllSourcesWithPaginationParams struct {
+	PageOffset int32 `json:"page_offset"`
+	PageLimit  int32 `json:"page_limit"`
+}
+
+func (q *Queries) GetAllSourcesWithPagination(ctx context.Context, arg GetAllSourcesWithPaginationParams) ([]Source, error) {
+	rows, err := q.db.Query(ctx, getAllSourcesWithPagination, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}

@@ -56,5 +56,19 @@ func RegisterRoutes(service service.Service) http.Handler {
 		)
 	}
 
+	// backoffice
+	{
+		r.Post("/backoffice/get-sources",
+			httpserver.NewEndpoint(
+				service.GetAllSourceByPagination,
+			),
+		)
+		r.Post("/backoffice/create-source",
+			httpserver.NewEndpoint(
+				service.CreateSource,
+			),
+		)
+	}
+
 	return mux
 }

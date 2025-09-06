@@ -1,10 +1,12 @@
 import http from 'k6/http';
-import { check } from 'k6';
-
 
 export const options = {
-  vus: 1000,
+  vus: 800,
   duration: '5m',
+  thresholds: {
+    http_req_failed: ['rate<0.01'], // error rate < 1% (=> success > 99%)
+    http_req_duration: ['p(95)<5000'], // optional: 95% request < 5sec
+  },
 }
 
 export default function () {
@@ -25,9 +27,6 @@ export default function () {
     },
   };
 
-  const res = http.post(url, payload, params);
+  http.post(url, payload, params);
 
-  check(res, {
-    'is status 200': (r) => r.status === 200,
-  });
 }
